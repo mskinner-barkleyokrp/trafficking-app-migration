@@ -1,4 +1,3 @@
-// src/pages/Templates.jsx
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   PlusIcon,

@@ -1,4 +1,4 @@
-// src/pages/ClientsCampaigns.jsx
+
 import React, { useState, useEffect, useMemo } from 'react'; // Added useEffect
 import { PlusIcon, EditIcon, TrashIcon, SearchIcon, ChevronRightIcon } from 'lucide-react'; // Added ChevronRightIcon
 import { Button } from '../components/Button';
@@ -9,7 +9,7 @@ import { EditClientModal } from '../components/EditClientModal';
 import { EditCampaignModal } from '../components/EditCampaignModal';
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal';
 import { useClients } from '../hooks/useClients';
-import { useCampaigns } from '../hooks/useCampaigns';
+import { useCampaigns } from '../hooks/useCampaigns'; // This hook is fine for fetching
 import { LoadingSpinner } from '../components/LoadingSpinner';
 
 export const ClientsCampaigns = () => {
@@ -70,7 +70,7 @@ export const ClientsCampaigns = () => {
   const filteredCampaigns = campaigns.filter(campaign =>
     campaign.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
+  
   const handleOpenAddClientModal = () => setShowAddClientModal(true);
   const handleOpenAddCampaignModal = () => setShowAddCampaignModal(true);
 
@@ -93,30 +93,30 @@ export const ClientsCampaigns = () => {
     }
   };
 
-  const handleSaveCampaign = async (campaignData, isEditing = false) => {
+  const handleSaveCampaign = async (campaignData) => {
+    // This function is now simpler. It's called for each campaign by the modal.
     try {
-      // Ensure client_id is present if adding a campaign when selectedClientIdForCampaigns is set
-      const payload = { ...campaignData };
-      if (!payload.client_id && selectedClientIdForCampaigns && !isEditing) {
-        payload.client_id = selectedClientIdForCampaigns;
-      }
-
-      if (isEditing && editingItem) {
-        await updateCampaign(editingItem.id, payload);
-        displayFeedback('success', 'Campaign updated successfully!');
-      } else {
-        await createCampaign(payload);
-        displayFeedback('success', 'Campaign created successfully!');
-      }
-      setShowAddCampaignModal(false);
-      setShowEditCampaignModal(false);
-      setEditingItem(null);
-      refetchCampaigns(); // Refetch after save
+        await createCampaign(campaignData);
+        // Feedback is handled after all campaigns are created in the modal
     } catch (error) {
-      displayFeedback('error', `Error saving campaign: ${error.message}`);
-      throw error; // Re-throw for modal
+        console.error("Error saving a single campaign:", error);
+        // Re-throw the error so the modal's loop can catch it and display an alert
+        throw error; 
     }
   };
+
+  const handleUpdateCampaign = async (campaignData) => {
+    try {
+        await updateCampaign(editingItem.id, campaignData);
+        displayFeedback('success', 'Campaign updated successfully!');
+        setShowEditCampaignModal(false);
+        setEditingItem(null);
+    } catch (error) {
+        displayFeedback('error', `Error updating campaign: ${error.message}`);
+        throw error;
+    }
+  }
+
 
   const handleEditClientClick = (client) => {
     setEditingItem(client);
@@ -206,7 +206,7 @@ export const ClientsCampaigns = () => {
               <Input type="text" placeholder={`Search ${activeTab}...`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 !mb-0" fullWidth/>
             </div>
             <Button variant="secondary" icon={<PlusIcon size={16} />} onClick={activeTab === 'clients' ? handleOpenAddClientModal : handleOpenAddCampaignModal}>
-              Add {activeTab === 'clients' ? 'Client' : 'Campaign'}
+               {activeTab === 'clients' ? 'Add Client' : 'Build Campaigns'}
             </Button>
           </div>
 
@@ -316,9 +316,14 @@ export const ClientsCampaigns = () => {
 
       {/* Modals */}
       <AddClientModal isOpen={showAddClientModal} onClose={() => setShowAddClientModal(false)} onSave={(data) => handleSaveClient(data, false)} />
-      <AddCampaignModal isOpen={showAddCampaignModal} onClose={() => setShowAddCampaignModal(false)} onSave={(data) => handleSaveCampaign(data, false)} clients={clients} />
+      <AddCampaignModal 
+          isOpen={showAddCampaignModal} 
+          onClose={() => setShowAddCampaignModal(false)} 
+          onSave={handleSaveCampaign} 
+          clients={clients} 
+          preselectedClientId={selectedClientIdForCampaigns}/>
       {editingItem && showEditClientModal && <EditClientModal isOpen={showEditClientModal} onClose={() => { setShowEditClientModal(false); setEditingItem(null); }} onSave={(id, data) => handleSaveClient(data, true)} client={editingItem} />}
-      {editingItem && showEditCampaignModal && <EditCampaignModal isOpen={showEditCampaignModal} onClose={() => { setShowEditCampaignModal(false); setEditingItem(null); }} onSave={(id, data) => handleSaveCampaign(data, true)} campaign={editingItem} clients={clients} />}
+      {editingItem && showEditCampaignModal && <EditCampaignModal isOpen={showEditCampaignModal} onClose={() => { setShowEditCampaignModal(false); setEditingItem(null); }} onSave={(id, data) => handleUpdateCampaign(data)} campaign={editingItem} clients={clients} />}
       {itemToDelete && <ConfirmDeleteModal isOpen={showDeleteConfirmModal} onClose={() => { setShowDeleteConfirmModal(false); setItemToDelete(null); setDeleteType(''); }} onConfirm={handleConfirmDelete} title={`Delete ${deleteType === 'client' ? 'Client' : 'Campaign'}`} message={`Are you sure you want to delete the ${deleteType} "${itemToDelete?.name}"? This action cannot be undone.`} itemName={itemToDelete?.name} isDeleting={isProcessingDelete} />}
     </div>
   );

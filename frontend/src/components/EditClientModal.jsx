@@ -1,4 +1,3 @@
-// src/components/EditClientModal.jsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { SaveIcon, Loader2Icon } from 'lucide-react';
 import { Button } from './Button';
@@ -11,24 +10,30 @@ export const EditClientModal = ({ isOpen, onClose, onSave, client }) => {
   const [formData, setFormData] = useState({
     name: '',
     placement_template_id: '',
+    campaign_template_id: '',
     utm_template_id: '',
     cm360_instance_id: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [selectedPlacementTemplateStructure, setSelectedPlacementTemplateStructure] = useState([]);
+  const [selectedCampaignTemplateStructure, setSelectedCampaignTemplateStructure] = useState([]);
   const [selectedUtmTemplateStructure, setSelectedUtmTemplateStructure] = useState([]);
 
   // Hooks and helper functions are unchanged and correct.
   const clientIdForTemplateFetch = client?.id || null;
   const { templates: allPlacementTemplates, loading: loadingPlacementTemplates } = useTemplates(clientIdForTemplateFetch, 'placement');
+  const { templates: allCampaignTemplates, loading: loadingCampaignTemplates } = useTemplates(clientIdForTemplateFetch, 'campaign');
   const { templates: allUtmTemplates, loading: loadingUtmTemplates } = useTemplates(clientIdForTemplateFetch, 'utm');
 
   useEffect(() => {
     if (client) {
       setFormData({
         name: client.name || '',
+        // The client object from DB doesn't have the template IDs, it has the structures.
+        // We need to find the template whose structure matches to pre-select the ID.
         placement_template_id: client.placement_template_id || '',
+        campaign_template_id: client.campaign_template_id || '',
         utm_template_id: client.utm_template_id || '',
         cm360_instance_id: client.cm360_instance_id || ''
       });
@@ -43,6 +48,15 @@ export const EditClientModal = ({ isOpen, onClose, onSave, client }) => {
       setSelectedPlacementTemplateStructure([]);
     }
   }, [formData.placement_template_id, allPlacementTemplates]);
+
+  useEffect(() => {
+    if (formData.campaign_template_id && allCampaignTemplates.length > 0) {
+      const foundTemplate = allCampaignTemplates.find(t => t.id === formData.campaign_template_id);
+      setSelectedCampaignTemplateStructure(foundTemplate?.template_structure || []);
+    } else {
+      setSelectedCampaignTemplateStructure([]);
+    }
+  }, [formData.campaign_template_id, allCampaignTemplates]);
 
   useEffect(() => {
     if (formData.utm_template_id && allUtmTemplates.length > 0) {
@@ -67,6 +81,7 @@ export const EditClientModal = ({ isOpen, onClose, onSave, client }) => {
         name: formData.name,
         // The form now needs to reference the full template objects to get the structure
         placement_name_template: allPlacementTemplates.find(t => t.id === formData.placement_template_id)?.template_structure || null,
+        campaign_name_template: allCampaignTemplates.find(t => t.id === formData.campaign_template_id)?.template_structure || null,
         utm_structure: allUtmTemplates.find(t => t.id === formData.utm_template_id)?.template_structure || null,
         cm360_instance_id: formData.cm360_instance_id || null,
       };
@@ -117,8 +132,9 @@ export const EditClientModal = ({ isOpen, onClose, onSave, client }) => {
   };
 
   const placementTemplateOptions = useMemo(() => createTemplateOptions(allPlacementTemplates, 'placement'), [allPlacementTemplates]);
+  const campaignTemplateOptions = useMemo(() => createTemplateOptions(allCampaignTemplates, 'campaign'), [allCampaignTemplates]);
   const utmTemplateOptions = useMemo(() => createTemplateOptions(allUtmTemplates, 'UTM'), [allUtmTemplates]);
-  const isLoadingAnyTemplates = loadingPlacementTemplates || loadingUtmTemplates;
+  const isLoadingAnyTemplates = loadingPlacementTemplates || loadingCampaignTemplates || loadingUtmTemplates;
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={`Edit Client: ${client?.name || ''}`}>
@@ -160,6 +176,28 @@ export const EditClientModal = ({ isOpen, onClose, onSave, client }) => {
             </label>
             <div className="mt-1 p-2 bg-gray-100 border rounded text-xs font-mono min-h-[40px] flex items-center">
                 {generateHumanReadablePreview(selectedPlacementTemplateStructure)}
+            </div>
+          </div>
+          
+          {/* --- CORRECTED: Campaign Template Section --- */}
+          <div>
+            <ReactSelect
+              label="Default Campaign Template"
+              options={campaignTemplateOptions}
+              value={campaignTemplateOptions.find(opt => opt.value === formData.campaign_template_id) || null}
+              onChange={option => {
+                const value = option ? option.value : '';
+                handleChange('campaign_template_id', value);
+              }}
+              fullWidth
+              disabled={loadingCampaignTemplates}
+              helperText="Sets the default campaign naming template for this client."
+            />
+            <label className="mt-3 block text-sm font-medium text-gray-700">
+                Selected Template Preview:
+            </label>
+            <div className="mt-1 p-2 bg-gray-100 border rounded text-xs font-mono min-h-[40px] flex items-center">
+                {generateHumanReadablePreview(selectedCampaignTemplateStructure)}
             </div>
           </div>
           

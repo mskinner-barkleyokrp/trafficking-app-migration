@@ -10,32 +10,38 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState({
     name: '',
     placement_template_id: '',
-    campaign_template_id: '',
     utm_template_id: '',
+    campaign_template_id: '',
     cm360_instance_id: ''
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Get global templates (available to all clients)
-  const { templates: placementTemplates = [] } = useTemplates('', 'placement')
-  const { templates: campaignTemplates = [] } = useTemplates('', 'campaign')
-  const { templates: utmTemplates = [] } = useTemplates('', 'utm')
+  // Fetch all global templates
+  const { templates: allGlobalTemplates } = useTemplates(null, null); // Fetch all types
 
-  // Filter for global templates only (where client field is null/empty)
-  const globalPlacementTemplates = placementTemplates.filter(t => !t.client)
-  const globalCampaignTemplates = campaignTemplates.filter(t => !t.client)
-  const globalUtmTemplates = utmTemplates.filter(t => !t.client)
+  const placementTemplates = allGlobalTemplates.filter(t => t.type === 'placement' && t.is_global);
+  const utmTemplates = allGlobalTemplates.filter(t => t.type === 'utm' && t.is_global);
+  const campaignTemplates = allGlobalTemplates.filter(t => t.type === 'campaign' && t.is_global);
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!formData.name.trim()) {
-      alert('Client name is required')
-      return
+      alert('Client name is required');
+      return;
     }
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
     try {
-      await onSave(formData)
+      // Resolve template IDs to their full structures before saving
+      const payload = {
+        name: formData.name,
+        placement_name_template: placementTemplates.find(t => t.id === formData.placement_template_id)?.template_structure || null,
+        utm_structure: utmTemplates.find(t => t.id === formData.utm_template_id)?.template_structure || null,
+        campaign_name_template: campaignTemplates.find(t => t.id === formData.campaign_template_id)?.template_structure || null,
+        cm360_instance_id: formData.cm360_instance_id,
+      };
+
+      await onSave(payload);
       // Reset form
       setFormData({
         name: '',
@@ -43,43 +49,44 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
         campaign_template_id: '',
         utm_template_id: '',
         cm360_instance_id: ''
-      })
-      onClose()
+      });
+      onClose();
     } catch (error) {
-      console.error('Error creating client:', error)
-      alert('Error creating client: ' + error.message)
+      console.error('Error creating client:', error);
+      alert('Error creating client: ' + error.message);
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value
-    }))
-  }
+      [field]: value,
+    }));
+  };
 
-  const placementTemplateOptions = globalPlacementTemplates.map(template => ({
+  const placementTemplateOptions = placementTemplates.map(template => ({
     value: template.id,
-    label: template.display_name
-  }))
+    label: template.display_name,
+  }));
 
-  const campaignTemplateOptions = globalCampaignTemplates.map(template => ({
+  const utmTemplateOptions = utmTemplates.map(template => ({
     value: template.id,
-    label: template.display_name
-  }))
+    label: template.display_name,
+  }));
 
-  const utmTemplateOptions = globalUtmTemplates.map(template => ({
+  const campaignTemplateOptions = campaignTemplates.map(template => ({
     value: template.id,
-    label: template.display_name
-  }))
+    label: template.display_name,
+  }));
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Add New Client">
       <form onSubmit={handleSubmit} className="space-y-6">
         <Input
           label="Client Name"
+          name="name" // Add name for form handling if needed
           value={formData.name}
           onChange={(e) => handleChange('name', e.target.value)}
           placeholder="Enter client name"
@@ -91,7 +98,7 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
           <h3 className="text-lg font-medium text-black border-b border-gray-200 pb-2">
             Template Selection
           </h3>
-          
+
           <div>
             <ReactSelect
               label="Placement Template"
@@ -99,7 +106,7 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
                 { value: '', label: 'No template (use default)' },
                 ...placementTemplateOptions
               ]}
-              value={formData.placement_template_id}
+              value={placementTemplateOptions.find(opt => opt.value === formData.placement_template_id) || null}
               onChange={option => {
                 const value = option ? option.value : '';
                 handleChange('placement_template_id', value);
@@ -115,33 +122,12 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
 
           <div>
             <ReactSelect
-              label="Campaign Template"
-              options={[
-                { value: '', label: 'No template (use default)' },
-                ...campaignTemplateOptions
-              ]}
-              value={formData.campaign_template_id}
-              onChange={option => {
-                const value = option ? option.value : '';
-                handleChange('campaign_template_id', value);
-              }}
-              fullWidth
-            />
-            {formData.campaign_template_id && (
-              <p className="mt-1 text-sm text-gray-600">
-                Selected: {campaignTemplateOptions.find(t => t.value === formData.campaign_template_id)?.label}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <ReactSelect
               label="UTM Template"
               options={[
                 { value: '', label: 'No template (use default)' },
                 ...utmTemplateOptions
               ]}
-              value={formData.utm_template_id}
+              value={utmTemplateOptions.find(opt => opt.value === formData.utm_template_id) || null}
               onChange={option => {
                 const value = option ? option.value : '';
                 handleChange('utm_template_id', value);
@@ -151,6 +137,27 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
             {formData.utm_template_id && (
               <p className="mt-1 text-sm text-gray-600">
                 Selected: {utmTemplateOptions.find(t => t.value === formData.utm_template_id)?.label}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <ReactSelect
+              label="Campaign Template"
+              options={[
+                { value: '', label: 'No template (use default)' },
+                ...campaignTemplateOptions
+              ]}
+              value={campaignTemplateOptions.find(opt => opt.value === formData.campaign_template_id) || null}
+              onChange={option => {
+                const value = option ? option.value : '';
+                handleChange('campaign_template_id', value);
+              }}
+              fullWidth
+            />
+            {formData.campaign_template_id && (
+              <p className="mt-1 text-sm text-gray-600">
+                Selected: {campaignTemplateOptions.find(t => t.value === formData.campaign_template_id)?.label}
               </p>
             )}
           </div>
@@ -165,6 +172,7 @@ export const AddClientModal = ({ isOpen, onClose, onSave }) => {
 
         <Input
           label="CM360 Instance ID"
+          name="cm360_instance_id"
           value={formData.cm360_instance_id}
           onChange={(e) => handleChange('cm360_instance_id', e.target.value)}
           placeholder="Enter CM360 instance ID (optional)"

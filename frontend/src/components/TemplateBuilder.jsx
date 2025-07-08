@@ -1,4 +1,3 @@
-// src/components/TemplateBuilder.jsx
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { PlusIcon, XIcon, GripVerticalIcon, InfoIcon } from 'lucide-react';
 import { Button } from './Button';
@@ -13,6 +12,7 @@ export const TEMPLATE_FIELDS = {
   channel: { label: 'Channel', type: 'text' },
   targeting: { label: 'Targeting', type: 'text' },
   tactic: { label: 'Tactic', type: 'text' },
+  campaign_name_convention: { label: 'Campaign Name Convention', type: 'text' },
   geo_target: { label: 'Geography Targeting', type: 'text' },
   demo: { label: 'Demo', type: 'text' },
   device: { label: 'Device', type: 'text' },
@@ -205,6 +205,8 @@ export const TemplateBuilder = ({ value = [], onChange, className = '', template
     let fields = Object.keys(TEMPLATE_FIELDS);
     if (templateType === 'utm') {
         fields = ['landing_page', 'source', 'medium', 'campaign', 'term', 'content', 'custom'];
+    } else if (templateType === 'campaign') {
+        fields = ['client', 'start_date', 'end_date', 'custom'];
     }
     return fields
         .filter(key => !usedFields.includes(key) || TEMPLATE_FIELDS[key].allowMultiple) 
@@ -469,6 +471,9 @@ export const TemplateBuilder = ({ value = [], onChange, className = '', template
                     <li>'Dropdown (Custom Options)' lets you define choices specific to this template field.</li>
                     <li>'Separator' is placed *after* each component. Last component's separator is ignored.</li>
                   </>
+                )}
+                {templateType === 'campaign' && (
+                  <li>Campaign templates have a limited field selection (Client, Dates, Custom) to build names.</li>
                 )}
                 <li>'Custom Static Text' adds fixed text.</li>
               </ul>

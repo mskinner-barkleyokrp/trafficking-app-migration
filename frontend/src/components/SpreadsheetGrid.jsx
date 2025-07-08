@@ -1,4 +1,4 @@
-// src/components/SpreadsheetGrid.jsx
+
 import React, { useEffect, useState, useRef } from 'react';
 import { PlusIcon, TrashIcon } from 'lucide-react';
 import { Button } from './Button';
@@ -244,11 +244,16 @@ export const SpreadsheetGrid = ({
                           instanceId={`${rowIndex}-${column.accessor}`}
                           options={column.options}
                           // Find the full option object that matches the cell's primitive value
-                          value={column.options?.find(opt => opt.value === cellValue) || null}
+                          // FIX: If it's a new (creatable) value not in the options list, create a temporary option object for display.
+                          value={
+                            column.options?.find(opt => opt.value === cellValue) || 
+                            (cellValue ? { label: cellValue, value: cellValue } : null)
+                          }
                           // Extract the primitive value from the selected option object
                           onChange={(selectedOption) => updateData(rowIndex, column.accessor, selectedOption ? selectedOption.value : '')}
                           onFocus={() => setActiveCell({ rowIndex, columnId: column.accessor })}
                           onKeyDown={(e) => handleKeyDown(e, rowIndex, colIndex)}
+                          isCreatable={column.isCreatable || false} // Pass isCreatable prop
                           // Apply custom compact styles
                           styles={customSelectStyles}
                           menuPlacement="top"

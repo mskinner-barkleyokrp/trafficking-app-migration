@@ -1,4 +1,4 @@
-// src/hooks/useCampaigns.js
+
 import { useCallback } from 'react';
 import { apiClient } from '../lib/api';
 import { useApi } from './useApi';
@@ -19,10 +19,16 @@ export function useCampaigns(clientId) {
   } = useApi(fetchCampaigns, [clientId]); // Pass memoized fetchCampaigns and its dependency
 
   const createCampaign = useCallback(async (campaignData) => {
-    if (!clientId) throw new Error("Client ID is required to create a campaign.");
-    await apiClient.createCampaign({ ...campaignData, client_id: clientId }); // Ensure client_id is passed
+    // FIX: The createCampaign function should not depend on the hook's `clientId`.
+    // It must use the client_id provided in the campaignData object from the form.
+    if (!campaignData || !campaignData.client_id) {
+        throw new Error("Client ID is required in the campaign data to create a campaign.");
+    }
+    await apiClient.createCampaign(campaignData);
+    // After creation, refetch will correctly use the hook's `clientId` to refresh the list,
+    // which is the desired behavior for updating the UI.
     await refetch();
-  }, [clientId, refetch]);
+  }, [refetch]);
 
   const updateCampaign = useCallback(async (campaignId, campaignData) => {
     // campaignData should ideally already contain client_id if it's updatable

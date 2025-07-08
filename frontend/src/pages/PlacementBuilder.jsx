@@ -1,4 +1,3 @@
-// src/pages/PlacementBuilder.jsx
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { InfoIcon, SaveIcon, PlusIcon, Loader2Icon, Edit2Icon, Trash2Icon, CopyIcon, RefreshCwIcon } from 'lucide-react';
 import { Button } from '../components/Button';
@@ -235,7 +234,7 @@ export const PlacementBuilder = () => {
   } = usePlacements(selectedClient && selectedCampaign ? { client_id: selectedClient, campaign_id: selectedCampaign } : {});
 
   const clientData = useMemo(() => clients.find(c => c.id === selectedClient), [clients, selectedClient]);
-  const campaignData = useMemo(() => campaigns.find(c => c.id === selectedCampaign), [campaigns, selectedCampaign]);
+  const campaignData = useMemo(() => campaigns.find(c => c.id === selectedCampaign), [campaigns, selectedClient]);
 
   useEffect(() => {
     if (selectedClient && !templatesLoading) {
@@ -297,6 +296,7 @@ export const PlacementBuilder = () => {
         const fk = c.field;
         const bc = TEMPLATE_FIELDS[fk] || {};
         let ct = c.dataType || 'text';
+        let isCreatable = false;
         let co = [];
 
         if (c.dataType === 'database_lookup' && c.legendCategory) {
@@ -310,6 +310,10 @@ export const PlacementBuilder = () => {
         } else if (c.dataType === 'select' && c.customOptions) {
           ct = 'select';
           co = c.customOptions.split(',').map(o => ({ label: o.trim(), value: o.trim() }));
+        } else if (fk === 'campaign') {
+          ct = 'select';
+          isCreatable = true;
+          co = campaigns.map(campaign => ({ value: campaign.name, label: campaign.name }));
         }
 
         return {
@@ -319,11 +323,12 @@ export const PlacementBuilder = () => {
           required: c.required !== undefined ? c.required : true,
           width: c.width || '180px',
           type: ct,
-          options: ct === 'select' ? [{ label: `Select...`, value: '' }, ...co] : undefined,
+          isCreatable,
+          options: fk === 'campaign' ? [{label: `Type here to create a custom campaign name`, value: ''}, ...co] : ct === 'select' ? [{ label: `Select...`, value: '' }, ...co] : undefined ,
           placeholder: c.placeholder || bc.placeholder || ''
         };
     });
-  }, [selectedClient, activeTemplateStructure, legendOptionsMap, isLoadingLegendValues, templatesLoading, activeTemplate]);
+  }, [selectedClient, activeTemplateStructure, legendOptionsMap, isLoadingLegendValues, templatesLoading, activeTemplate, campaigns]);
 
   // --- RESTORED: These definitions are now back in place ---
   const existingPlacementGridColumns = useMemo(() => {

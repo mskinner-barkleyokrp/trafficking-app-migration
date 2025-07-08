@@ -1,6 +1,7 @@
 import React, { forwardRef } from 'react';
 // Import 'Select' from react-select and alias it to avoid naming conflicts
 import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
 
 // You can keep your custom icon for other uses, but react-select has its own.
 // import { ChevronDownIcon } from 'lucide-react'; 
@@ -14,11 +15,14 @@ export const ReactSelect = forwardRef(
       helperText,
       fullWidth = false,
       className = '', // This will now be passed to the main control element
+      isCreatable = false, // New prop to switch to CreatableSelect
       // We can also accept react-select specific props like isMulti, isClearable, etc.
       ...props 
     },
     ref,
   ) => {
+    const Component = isCreatable ? CreatableSelect : Select;
+
     return (
       <div className={`${fullWidth ? 'w-full' : ''} mb-4`}>
         {label && (
@@ -30,7 +34,7 @@ export const ReactSelect = forwardRef(
           </label>
         )}
         
-        <Select
+        <Component
           ref={ref}
           options={options}
           // The 'classNames' prop is the modern way to style react-select with Tailwind

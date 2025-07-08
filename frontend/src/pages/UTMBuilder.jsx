@@ -1,4 +1,4 @@
-// src/pages/UTMBuilder.jsx
+
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { SaveIcon, LinkIcon, CopyIcon, Loader2Icon, InfoIcon, Edit2Icon, Trash2Icon, RefreshCwIcon } from 'lucide-react';
 import { Button } from '../components/Button';
@@ -167,6 +167,7 @@ export const UTMBuilder = () => {
                 const fieldKey = comp.field;
                 const baseConfig = TEMPLATE_FIELDS[fieldKey] || {};
                 let colType = comp.dataType || baseConfig.type || 'text';
+                let isCreatable = false;
                 let colOptions = [];
 
                 // --- CORRECTED LOGIC: Prioritize template settings over defaults ---
@@ -185,6 +186,10 @@ export const UTMBuilder = () => {
                     } else if (fieldKey === 'medium') {
                         colType = 'select';
                         colOptions = defaultMediums;
+                    } else if (fieldKey === 'campaign') {
+                        colType = 'select';
+                        isCreatable = true; // Allow creating new campaign names
+                        colOptions = campaigns.map(c => ({ value: c.name, label: c.name }));
                     }
                 }
 
@@ -194,6 +199,7 @@ export const UTMBuilder = () => {
                     accessor: fieldKey,
                     type: colType,
                     options: colOptions.length > 0 ? colOptions : undefined,
+                    isCreatable: isCreatable,
                     required: comp.required === true,
                     placeholder: comp.placeholder || baseConfig.description || `Enter ${fieldKey}`,
                     width: comp.width || (fieldKey === 'landing_page' ? '250px' : '180px'),
@@ -204,7 +210,7 @@ export const UTMBuilder = () => {
             { id: 'landingPageUrl', header: 'Landing Page URL *', accessor: 'landingPageUrl', required: true, width: '250px', placeholder: 'https://example.com/page' },
             { id: 'source', header: 'Source *', accessor: 'source', type: 'select', options: defaultSources, required: true, width: '160px' },
             { id: 'medium', header: 'Medium *', accessor: 'medium', type: 'select', options: defaultMediums, required: true, width: '160px' },
-            { id: 'campaign', header: 'Campaign', accessor: 'campaign', placeholder: 'e.g., summer_promo', required: false },
+            { id: 'campaign', header: 'Campaign', accessor: 'campaign', placeholder: 'e.g., summer_promo', required: false, type: 'select', isCreatable: true, options: campaigns.map(c => ({ value: c.name, label: c.name })) },
             { id: 'term', header: 'Term', accessor: 'term', placeholder: 'e.g., blue_widgets', required: false },
             { id: 'content', header: 'Content', accessor: 'content', placeholder: 'e.g., banner_ad_v1', required: false },
         ];
