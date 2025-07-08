@@ -290,6 +290,8 @@ export const TemplateBuilder = ({ value = [], onChange, className = '', template
                                   });
                                 }}
                                 className="w-48"
+                                isCreatable={true}
+                                formatCreateLabel={inputValue => `Change to new field: "${inputValue}"`}
                               />
                             </div>
                           ) : (
@@ -313,7 +315,7 @@ export const TemplateBuilder = ({ value = [], onChange, className = '', template
                            <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Field Display Name (Header)</label>
                             <Input
-                              value={component.header || TEMPLATE_FIELDS[component.field]?.label || ''}
+                              value={component.header || TEMPLATE_FIELDS[component.field]?.label || component.field || ''}
                               onChange={(e) => updateComponent(component.id, { header: e.target.value })}
                               placeholder="Header for this field in tables"
                               className="w-full !mb-0"
@@ -430,7 +432,7 @@ export const TemplateBuilder = ({ value = [], onChange, className = '', template
         <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200">
           <div className="relative">
             <ReactSelect
-              placeholder="Add Field Key..."
+              placeholder="Add or Create Field Key..."
               options={availableFieldsForSelect}
               value={null}
               onChange={option => {
@@ -438,6 +440,8 @@ export const TemplateBuilder = ({ value = [], onChange, className = '', template
                   addField(option.value);
                 }
               }}
+              isCreatable={true}
+              formatCreateLabel={inputValue => `Create new field: "${inputValue}"`}
             />
           </div>
           <Button

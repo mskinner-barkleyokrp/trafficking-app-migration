@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import * as XLSX from 'xlsx'; // Import xlsx library
 import {
   PlusIcon,
   SaveIcon,
@@ -8,6 +9,7 @@ import {
   CopyIcon,
   BookMarkedIcon,
   SearchIcon,
+  UploadIcon,
 } from 'lucide-react'
 import { Button } from '../components/Button'
 import { Input } from '../components/Input'
@@ -19,7 +21,8 @@ import { LoadingSpinner } from '../components/LoadingSpinner'
 import { useAllLegendFieldItems } from '../hooks/useLegendFields'
 import { LegendItemFormModal } from '../components/LegendItemFormModal'
 import { ConfirmDeleteModal } from '../components/ConfirmDeleteModal'
-
+import { UploadLegendConfirmModal } from '../components/UploadLegendConfirmModal'; // Import the new modal
+import { apiClient } from '../lib/api';
 
 export const Templates = () => {
   const [showNewTemplate, setShowNewTemplate] = useState(false)
@@ -37,6 +40,13 @@ export const Templates = () => {
   const [legendSearchTerm, setLegendSearchTerm] = useState('');
   const [legendCategoryFilter, setLegendCategoryFilter] = useState('');
 
+  // ---- NEW STATE FOR UPLOAD ----
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [parsedUploadData, setParsedUploadData] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  // ---- END NEW STATE ----
+
 
   const { clients = [] } = useClients()
   const { templates = [], loading: templatesLoading, createTemplate, updateTemplate, deleteTemplate } = useTemplates(selectedClientFilter, templateTypeFilter)
@@ -47,7 +57,8 @@ export const Templates = () => {
     errorAllItems, 
     createLegendItem, 
     updateLegendItem, 
-    deleteLegendItem 
+    deleteLegendItem,
+    refetchAllItems,
   } = useAllLegendFieldItems();
 
   const filteredTemplates = useMemo(() => (templates || []).filter(template => {
@@ -196,6 +207,88 @@ export const Templates = () => {
     }
   }
 
+  // ---- NEW UPLOAD HANDLER FUNCTIONS ----
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        // header: 1 gives us an array of arrays
+        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        
+        const headerRow = json[0];
+        const dataRows = json.slice(1);
+        
+        const legendItemsToUpload = [];
+        
+        // Find category pairs (e.g., "Site" and "Site (Abreveated)")
+        const categoryPairs = {};
+        headerRow.forEach((header, index) => {
+          if (header && !header.toLowerCase().includes('(abreveated)')) {
+            const abbrHeader = `${header} (Abreveated)`;
+            const abbrIndex = headerRow.findIndex(h => h && h.toLowerCase() === abbrHeader.toLowerCase());
+            if (abbrIndex !== -1) {
+              categoryPairs[header] = { valueIndex: index, abbrIndex };
+            }
+          }
+        });
+
+        dataRows.forEach(row => {
+          for (const category in categoryPairs) {
+            const { valueIndex, abbrIndex } = categoryPairs[category];
+            const value = row[valueIndex];
+            if (value) { // Only add if there's a value
+              legendItemsToUpload.push({
+                category: category.trim(),
+                value: String(value).trim(),
+                abbreviation: row[abbrIndex] ? String(row[abbrIndex]).trim() : '',
+              });
+            }
+          }
+        });
+
+        if (legendItemsToUpload.length === 0) {
+            alert("No valid legend items found in the file. Please check the file format.");
+            return;
+        }
+
+        setParsedUploadData(legendItemsToUpload);
+        setShowUploadModal(true);
+
+      } catch (error) {
+        console.error("Error parsing file:", error);
+        alert("Failed to parse file. Please ensure it's a valid XLSX or CSV file with the correct format.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    
+    // Reset file input so the same file can be uploaded again
+    if(fileInputRef.current) fileInputRef.current.value = "";
+  };
+  
+  const handleConfirmUpload = async (uploadPayload) => {
+    setIsUploading(true);
+    try {
+      await apiClient.bulkUploadLegendFields(uploadPayload);
+      displayFeedback('Legend items uploaded successfully!');
+      setShowUploadModal(false);
+      setParsedUploadData([]);
+      refetchAllItems(); // Refresh the list of legend items
+    } catch (error) {
+      alert("Error during upload: " + error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  // ---- END NEW UPLOAD HANDLER FUNCTIONS ----
+
+
   const clientOptions = useMemo(() => clients.map(client => ({
     value: client.id,
     label: client.name
@@ -339,9 +432,16 @@ export const Templates = () => {
                         <BookMarkedIcon className="text-gray-600"/>
                         All Legend Items ({filteredLegendItems.length})
                     </h3>
-                    <Button variant="secondary" icon={<PlusIcon size={16} />} onClick={handleAddLegendItemClick}>
-                        Add Legend Item
-                    </Button>
+                    <div className="flex gap-2">
+                        <Button variant="outline" icon={<UploadIcon size={16} />} onClick={() => fileInputRef.current.click()}>
+                            Bulk Upload
+                        </Button>
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".xlsx, .csv" className="hidden"/>
+
+                        <Button variant="secondary" icon={<PlusIcon size={16} />} onClick={handleAddLegendItemClick}>
+                            Add Legend Item
+                        </Button>
+                    </div>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex-1 relative">
@@ -422,6 +522,15 @@ export const Templates = () => {
         message={`Are you sure you want to delete this legend item? This action cannot be undone.`}
         itemName={`${deletingLegendItem?.category}: ${deletingLegendItem?.actual_value}`}
     />
+    {showUploadModal && (
+        <UploadLegendConfirmModal
+            isOpen={showUploadModal}
+            onClose={() => setShowUploadModal(false)}
+            onConfirm={handleConfirmUpload}
+            parsedData={parsedUploadData}
+            isUploading={isUploading}
+        />
+    )}
     </div>
   )
 }

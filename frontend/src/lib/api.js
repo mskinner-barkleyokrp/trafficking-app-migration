@@ -167,6 +167,10 @@ class ApiClient {
   async deleteLegendField(id) {
     return this.request(`/legend-fields/${id}`, { method: 'DELETE' });
   }
+  async bulkUploadLegendFields(payload) {
+    // payload is expected to be { items: [...], mode: '...' }
+    return this.request('/legend-fields/bulk-upload', { method: 'POST', body: payload });
+  }
 
   async createUtms(utmsDataArray) {
     // The backend now expects the array directly in the body.

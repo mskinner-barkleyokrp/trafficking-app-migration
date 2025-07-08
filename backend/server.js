@@ -1341,6 +1341,70 @@ app.delete('/api/legend-fields/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+app.post('/api/legend-fields/bulk-upload', authenticateToken, async (req, res) => {
+  const { items, mode } = req.body;
+  const userId = req.user.userId;
+
+  if (!items || !Array.isArray(items) || !mode) {
+    return res.status(400).json({ message: 'Invalid payload. "items" array and "mode" are required.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (mode === 'replace_category') {
+      const categories = [...new Set(items.map(item => item.category))];
+      if (categories.length > 0) {
+        await client.query(
+          'DELETE FROM wb_legend_fields WHERE display_name = ANY($1)',
+          [categories]
+        );
+      }
+      // After deleting, we fall through to the standard insert logic
+    }
+
+    // This handles 'replace_category' (after delete) and 'add_new'/'update'
+    for (const item of items) {
+      const { category, value, abbreviation } = item;
+      if (!category || !value) continue; // Skip invalid rows
+
+      const id = generateId();
+      const now = new Date();
+
+      if (mode === 'add_new') {
+        // Attempt to insert, but do nothing if a conflict on (display_name, value) occurs
+        await client.query(
+          `INSERT INTO wb_legend_fields (id, display_name, value, abbreviation, dt_created, created_by, dt_updated, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (display_name, value) DO NOTHING`,
+          [id, category, value, abbreviation || null, now, userId, now, userId]
+        );
+      } else { // Handles 'update' and 'replace_category'
+        // Insert or, on conflict, update the abbreviation and timestamps
+        await client.query(
+          `INSERT INTO wb_legend_fields (id, display_name, value, abbreviation, dt_created, created_by, dt_updated, updated_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (display_name, value) DO UPDATE SET
+             abbreviation = EXCLUDED.abbreviation,
+             dt_updated = NOW(),
+             updated_by = $6`,
+          [id, category, value, abbreviation || null, now, userId, now, userId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.status(200).json({ message: 'Legend fields uploaded successfully.' });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error during bulk legend upload:', error);
+    res.status(500).json({ message: 'Internal server error during upload.' });
+  } finally {
+    client.release();
+  }
+});
 // ---- END: NEW LEGEND FIELD CRUD ENDPOINTS ----
 
 // ---- START: NEW UTMs ENDPOINT ----
