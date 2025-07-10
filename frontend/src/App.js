@@ -1,18 +1,17 @@
 // src/App.js
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router'; // Ensure using react-router-dom
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router'; 
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Navbar } from './components/Navbar';
+import { ProtectedRoute } from './components/ProtectedRoute'; // Import our new component
 import { Dashboard } from './pages/Dashboard';
 import { PlacementBuilder } from './pages/PlacementBuilder';
 import { UTMBuilder } from './pages/UTMBuilder';
-// import { PlanDetails } from './pages/PlanDetails'; // Assuming commented out based on Navbar
 import { CheckoutForm } from './pages/CheckoutForm';
-// import { Settings } from './pages/Settings'; // Assuming commented out
 import { Login } from './pages/Login';
 import { Templates } from './pages/Templates';
 import { ClientsCampaigns } from './pages/ClientsCampaigns';
-import { TraffickingQueue } from './pages/TraffickingQueue'; // Import the new page
+import { TraffickingQueue } from './pages/TraffickingQueue';
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -27,7 +26,7 @@ function AppContent() {
     <BrowserRouter>
       <div className="flex flex-col min-h-screen bg-[#fff8ee]">
         {user && <Navbar />}
-        <main className={`flex-1 ${user ? 'p-4 sm:p-6' : ''}`}> {/* Adjusted padding */}
+        <main className={`flex-1 ${user ? 'p-4 sm:p-6' : ''}`}>
           <Routes>
             <Route
               path="/login"
@@ -38,15 +37,39 @@ function AppContent() {
               element={
                 user ? (
                   <Routes>
+                    {/* Routes available to all logged-in users */}
                     <Route path="/" element={<Dashboard />} />
-                    <Route path="/clients-campaigns" element={<ClientsCampaigns />} />
                     <Route path="/placements" element={<PlacementBuilder />} />
                     <Route path="/utms" element={<UTMBuilder />} />
-                    {/* <Route path="/plan-details" element={<PlanDetails />} /> */}
                     <Route path="/checkout" element={<CheckoutForm />} />
-                    <Route path="/trafficking-queue" element={<TraffickingQueue />} /> {/* Add new route */}
-                    {/* <Route path="/settings" element={<Settings />} /> */}
-                    <Route path="/templates" element={<Templates />} />
+                    
+                    {/* AdOps-only routes wrapped in ProtectedRoute */}
+                    <Route
+                      path="/clients-campaigns"
+                      element={
+                        <ProtectedRoute allowedRoles={['adops']}>
+                          <ClientsCampaigns />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/trafficking-queue"
+                      element={
+                        <ProtectedRoute allowedRoles={['adops']}>
+                          <TraffickingQueue />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/templates"
+                      element={
+                        <ProtectedRoute allowedRoles={['adops']}>
+                          <Templates />
+                        </ProtectedRoute>
+                      }
+                    />
+
+                    {/* Redirect any other authenticated routes to dashboard */}
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 ) : (

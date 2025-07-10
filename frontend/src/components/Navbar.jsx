@@ -5,18 +5,16 @@ import {
   LayoutDashboardIcon,
   FileSpreadsheetIcon,
   LinkIcon,
-  ClipboardListIcon,
   ShoppingCartIcon,
-  SettingsIcon,
   MenuIcon,
   XIcon,
   UsersIcon,
   LogOutIcon,
   UserCircleIcon,
-  ListChecksIcon, // New Icon for Trafficking Queue
+  ListChecksIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import M1MLogo from './M1MLogo.png'; // Assuming you have a logo component or image
+import M1MLogo from './M1MLogo.png';
 
 export const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -25,15 +23,27 @@ export const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const navItems = [
+  // Define all possible navigation items with roles
+  const allNavItems = [
     { path: '/', label: 'Dashboard', icon: <LayoutDashboardIcon size={20} /> },
-    { path: '/clients-campaigns', label: 'Clients & Campaigns', icon: <UsersIcon size={20} /> },
     { path: '/placements', label: 'Placement Builder', icon: <FileSpreadsheetIcon size={20} /> },
     { path: '/utms', label: 'UTM Builder', icon: <LinkIcon size={20} /> },
     { path: '/checkout', label: 'Checkout', icon: <ShoppingCartIcon size={20} /> },
-    { path: '/trafficking-queue', label: 'Trafficking Queue', icon: <ListChecksIcon size={20} /> }, // New Item
-    { path: '/templates', label: 'Templates', icon: <FileSpreadsheetIcon size={20} /> },
+    // AdOps only pages
+    { path: '/clients-campaigns', label: 'Clients & Campaigns', icon: <UsersIcon size={20} />, roles: ['adops'] },
+    { path: '/trafficking-queue', label: 'Trafficking Queue', icon: <ListChecksIcon size={20} />, roles: ['adops'] },
+    { path: '/templates', label: 'Templates', icon: <FileSpreadsheetIcon size={20} />, roles: ['adops'] },
   ];
+  
+  // Filter nav items based on user role
+  const navItems = allNavItems.filter(item => {
+    // If the item has no specific roles defined, it's public for all logged-in users
+    if (!item.roles) {
+        return true;
+    }
+    // If roles are defined, check if the user's role is included
+    return item.roles.includes(user?.role);
+  });
 
   const toggleMobileMenu = () => setIsMobileMenuOpen(!isMobileMenuOpen);
   const toggleUserMenu = () => setIsUserMenuOpen(!isUserMenuOpen);
@@ -44,10 +54,6 @@ export const Navbar = () => {
     setIsUserMenuOpen(false);
     navigate('/login');
   };
-
-  // ... (rest of the Navbar component remains the same as the previous version) ...
-  // Make sure to copy the full Navbar code from the previous response if you haven't
-  // This snippet only shows the navItems update and icon import.
 
   return (
     <nav className="bg-white border-b border-black/10 sticky top-0 z-40">
