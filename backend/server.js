@@ -27,11 +27,11 @@ const corsOptions = {
       }
       return callback(null, true);
   },
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE', // Explicitly allow all common methods
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
   credentials: true,
-  allowedHeaders: 'Content-Type, Authorization, X-Requested-With', // Explicitly allow headers
-  preflightContinue: false, // Let CORS handle the OPTIONS response
-  optionsSuccessStatus: 204 // For legacy browser support
+  allowedHeaders: 'Content-Type, Authorization, X-Requested-With',
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 // Enable preflight requests for all routes
@@ -73,98 +73,7 @@ const googleClient = new OAuth2Client({
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   redirectUri: process.env.GOOGLE_REDIRECT_URI
 })
-// let mailTransporter;
-// async function setupMailer() {
-//   if (process.env.NODE_ENV === 'production' && process.env.EMAIL_HOST) {
-//       mailTransporter = nodemailer.createTransport({
-//           host: process.env.EMAIL_HOST,
-//           port: process.env.EMAIL_PORT || 587,
-//           secure: (process.env.EMAIL_PORT || 587) == 465,
-//           auth: {
-//               user: process.env.EMAIL_USER,
-//               pass: process.env.EMAIL_PASS,
-//           },
-//       });
-//   } else {
-//       let testAccount = await nodemailer.createTestAccount();
-//       console.log('Ethereal test account for development emails:');
-//       console.log('User: %s', testAccount.user);
-//       console.log('Password: %s', testAccount.pass);
-//       mailTransporter = nodemailer.createTransport({
-//           host: 'smtp.ethereal.email',
-//           port: 587,
-//           secure: false,
-//           auth: {
-//               user: testAccount.user,
-//               pass: testAccount.pass,
-//           },
-//       });
-//   }
-//   try {
-//       await mailTransporter.verify();
-//       console.log('Mail transporter is ready to send emails.');
-//   } catch(error) {
-//       console.error('Error verifying mail transporter:', error);
-//   }
-// }
-// setupMailer().catch(console.error);
 
-// async function sendTraffickingRequestEmail(requestDetails, userEmail, clientName, campaignName) {
-//     if (!mailTransporter) {
-//         console.error('Mail transporter not configured. Skipping email.');
-//         return;
-//     }
-//     const adOpsEmail = process.env.ADOP_TEAM_EMAIL || 'adops-team@example.com';
-//     const fromEmail = process.env.EMAIL_FROM || '"M1M Platform" <noreply@m1m.com>';
-
-//     const subject = `New Trafficking Request Submitted for ${clientName}`;
-//     const trafficItemsHtml = requestDetails.trafficData.map(item => `
-//         <li style="margin-bottom: 10px;">
-//             <strong>Placement:</strong> ${item.placementName}
-//             <ul style="list-style-type: circle; margin-left: 20px;">
-//                 ${item.creativeAssignments.map(creative => `
-//                     <li>Creative: ${creative.creativeName} (${creative.startDate} - ${creative.endDate})</li>
-//                     <li>URL: <a href="${creative.landingPage}">${creative.landingPage}</a></li>
-//                 `).join('')}
-//             </ul>
-//         </li>
-//     `).join('');
-
-//     const htmlBody = `
-//         <h1>New Trafficking Request</h1>
-//         <p>A new trafficking request has been submitted.</p>
-//         <ul style="line-height: 1.6;">
-//             <li><strong>Submitted By:</strong> ${userEmail}</li>
-//             <li><strong>Client:</strong> ${clientName}</li>
-//             <li><strong>Campaign:</strong> ${campaignName || 'N/A'}</li>
-//             <li><strong>Due Date:</strong> ${requestDetails.dueDate ? new Date(requestDetails.dueDate).toLocaleDateString() : 'N/A'}</li>
-//             <li><strong>Notes:</strong> ${requestDetails.notes || 'None'}</li>
-//         </ul>
-//         <h2>Request Details:</h2>
-//         <ul>
-//             ${trafficItemsHtml}
-//         </ul>
-//         <p>Please review the request in the Trafficking Queue.</p>
-//     `;
-
-//     const mailOptions = {
-//         from: fromEmail,
-//         to: adOpsEmail,
-//         cc: userEmail,
-//         subject: subject,
-//         html: htmlBody
-//     };
-
-//     try {
-//         let info = await mailTransporter.sendMail(mailOptions);
-//         console.log('Email sent: ' + info.response);
-//         if (process.env.NODE_ENV !== 'production' || !process.env.EMAIL_HOST) {
-//             console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
-//         }
-//     } catch (error) {
-//         console.error('Error sending trafficking request email:', error);
-//     }
-// }
 // Auth middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization']
@@ -182,43 +91,50 @@ const authenticateToken = (req, res, next) => {
     next()
   })
 }
+
+// AdOps Authorization Middleware
+const authorizeAdOps = (req, res, next) => {
+  if (req.user && req.user.role === 'adops') {
+    next();
+  } else {
+    res.status(403).json({ message: 'Forbidden: You do not have permission to perform this action.' });
+  }
+};
+
 const MONGO_URI = process.env.MONGO_URI;
 let mongoClient;
 let mongoDb; // This will hold the db instance
 
 async function connectToMongo() {
   if (mongoDb) {
-    // If mongoDb instance is already available, check client's connection status
-    // This is a basic check; more robust checks might be needed for production
     try {
       if (mongoClient && mongoClient.topology && mongoClient.topology.isConnected()) {
         return mongoDb;
       }
     } catch (e) {
       console.warn("Error checking MongoDB connection status, will try to reconnect:", e.message);
-      // Fall through to reconnect
     }
   }
 
   if (!MONGO_URI) {
     console.error('MONGO_URI is not defined in your environment variables.');
-    process.exit(1); // Or handle more gracefully
+    process.exit(1);
   }
 
   try {
     console.log('Attempting to connect to MongoDB...');
-    mongoClient = new MongoClient(MONGO_URI); // MongoClient does not take dbName here directly for URI parsing
+    mongoClient = new MongoClient(MONGO_URI);
     await mongoClient.connect();
 
-    const dbNameFromUri = mongoClient.options?.dbName; // Tries to get dbName if parsed from URI
+    const dbNameFromUri = mongoClient.options?.dbName;
 
-    if (!dbNameFromUri && !process.env.MONGO_DB_NAME_FALLBACK) { // Added a fallback env variable
-        console.error("MongoDB database name not found in MONGO_URI and MONGO_DB_NAME_FALLBACK is not set. Please include the database name in your MONGO_URI (e.g., mongodb://localhost:27017/yourDbName) or set MONGO_DB_NAME_FALLBACK.");
-        await mongoClient.close(); // Close the client if we can't determine a DB
+    if (!dbNameFromUri && !process.env.MONGO_DB_NAME_FALLBACK) {
+        console.error("MongoDB database name not found in MONGO_URI and MONGO_DB_NAME_FALLBACK is not set.");
+        await mongoClient.close();
         process.exit(1);
     }
 
-    mongoDb = mongoClient.db(dbNameFromUri || process.env.MONGO_DB_NAME_FALLBACK); // Use parsed dbName or fallback
+    mongoDb = mongoClient.db(dbNameFromUri || process.env.MONGO_DB_NAME_FALLBACK);
     console.log(`Connected to MongoDB successfully. Database: ${mongoDb.databaseName}`);
     return mongoDb;
   } catch (err) {
@@ -226,16 +142,14 @@ async function connectToMongo() {
     if (mongoClient) {
         try { await mongoClient.close(); } catch (e) { console.error("Error closing mongoClient after connection failure:", e); }
     }
-    process.exit(1); // Or handle more gracefully
+    process.exit(1);
   }
 }
 
-// Call connectToMongo on server start to establish the initial connection
-// and handle potential startup errors.
 connectToMongo().catch(err => {
     console.error("MongoDB initial connection failed on startup:", err);
-    // process.exit(1) might be here if connectToMongo doesn't exit itself on failure
 });
+
 // Utility functions
 const generateId = () => {
   return require('crypto').randomUUID()
@@ -410,10 +324,11 @@ app.post('/api/auth/login', async (req, res) => {
   }
 })
 
-// CLIENT ROUTES
+// ===================================
+// CLIENT ROUTES - with authorization
+// ===================================
 app.get('/api/clients', authenticateToken, async (req, res) => {
   try {
-    // MODIFIED: Removed user-based restrictions to allow all users to see all clients.
     const result = await query(`
       SELECT * FROM wb_clients 
       ORDER BY name
@@ -423,7 +338,8 @@ app.get('/api/clients', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-app.post('/api/clients', authenticateToken, async (req, res) => {
+
+app.post('/api/clients', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { name, placement_name_template, utm_structure, cm360_instance_id } = req.body
     if (!name) {
@@ -444,7 +360,8 @@ app.post('/api/clients', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' })
   }
 })
-app.put('/api/clients/:clientId', authenticateToken, async (req, res) => {
+
+app.put('/api/clients/:clientId', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { clientId } = req.params
     const { name, placement_name_template, utm_structure, cm360_instance_id } = req.body
@@ -453,21 +370,22 @@ app.put('/api/clients/:clientId', authenticateToken, async (req, res) => {
     const result = await query(`
       UPDATE wb_clients 
       SET name = $1, placement_name_template = $2, utm_structure = $3, cm360_instance_id = $4, dt_updated = $5, updated_by = $6
-      WHERE id = $7 AND (created_by = $8 OR (access ? $9 AND access->>$9 LIKE '%edit%'))
+      WHERE id = $7
       RETURNING *
     `, [name, 
         typeof placement_name_template === 'object' ? JSON.stringify(placement_name_template) : placement_name_template,
         typeof utm_structure === 'object' ? JSON.stringify(utm_structure) : utm_structure,
-        cm360_instance_id, now, req.user.userId, clientId, req.user.userId, req.user.userId])
+        cm360_instance_id, now, req.user.userId, clientId])
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Client not found or no permission to edit' })
+      return res.status(404).json({ message: 'Client not found' })
     }
     res.json(result.rows[0])
   } catch (error) {
     res.status(500).json({ message: 'Internal server error' })
   }
 })
-app.delete('/api/clients/:clientId', authenticateToken, async (req, res) => {
+
+app.delete('/api/clients/:clientId', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { clientId } = req.params
     const campaignCheck = await query('SELECT COUNT(*) as count FROM wb_campaigns WHERE client_id = $1', [clientId])
@@ -476,11 +394,11 @@ app.delete('/api/clients/:clientId', authenticateToken, async (req, res) => {
     }
     const result = await query(`
       DELETE FROM wb_clients 
-      WHERE id = $1 AND (created_by = $2 OR (access ? $3 AND access->>$3 LIKE '%delete%'))
+      WHERE id = $1
       RETURNING *
-    `, [clientId, req.user.userId, req.user.userId])
+    `, [clientId])
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Client not found or no permission to delete' })
+      return res.status(404).json({ message: 'Client not found' })
     }
     res.json({ message: 'Client deleted successfully' })
   } catch (error) {
@@ -488,12 +406,13 @@ app.delete('/api/clients/:clientId', authenticateToken, async (req, res) => {
   }
 })
 
-// CAMPAIGN ROUTES
+// ===================================
+// CAMPAIGN ROUTES - with authorization
+// ===================================
 app.get('/api/campaigns', authenticateToken, async (req, res) => {
   try {
     const { client_id } = req.query
     if (!client_id) return res.status(400).json({ message: 'client_id is required' })
-    // MODIFIED: Removed user-based ownership/access checks.
     const result = await query(`
       SELECT c.*, cl.name as client_name 
       FROM wb_campaigns c
@@ -506,7 +425,8 @@ app.get('/api/campaigns', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' })
   }
 })
-app.post('/api/campaigns', authenticateToken, async (req, res) => {
+
+app.post('/api/campaigns', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { client_id, name, start_date, end_date, status = 'active' } = req.body
     if (!client_id || !name) return res.status(400).json({ message: 'client_id and name are required' })
@@ -522,7 +442,8 @@ app.post('/api/campaigns', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' })
   }
 })
-app.put('/api/campaigns/:campaignId', authenticateToken, async (req, res) => {
+
+app.put('/api/campaigns/:campaignId', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { campaignId } = req.params
     const { client_id, name, start_date, end_date, status } = req.body
@@ -531,18 +452,19 @@ app.put('/api/campaigns/:campaignId', authenticateToken, async (req, res) => {
     const result = await query(`
       UPDATE wb_campaigns 
       SET client_id = $1, name = $2, start_date = $3, end_date = $4, status = $5, dt_updated = $6, updated_by = $7
-      WHERE id = $8 AND (owner = $9 OR (access ? $10 AND access->>$10 LIKE '%edit%'))
+      WHERE id = $8
       RETURNING *
-    `, [client_id, name, start_date, end_date, status, now, req.user.userId, campaignId, req.user.userId, req.user.userId])
+    `, [client_id, name, start_date, end_date, status, now, req.user.userId, campaignId])
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Campaign not found or no permission to edit' })
+      return res.status(404).json({ message: 'Campaign not found' })
     }
     res.json(result.rows[0])
   } catch (error) {
     res.status(500).json({ message: 'Internal server error' })
   }
 })
-app.delete('/api/campaigns/:campaignId', authenticateToken, async (req, res) => {
+
+app.delete('/api/campaigns/:campaignId', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { campaignId } = req.params
     const placementCheck = await query('SELECT COUNT(*) as count FROM wb_placements WHERE campaign_id = $1', [campaignId])
@@ -551,11 +473,11 @@ app.delete('/api/campaigns/:campaignId', authenticateToken, async (req, res) => 
     }
     const result = await query(`
       DELETE FROM wb_campaigns 
-      WHERE id = $1 AND (owner = $2 OR (access ? $3 AND access->>$3 LIKE '%delete%'))
+      WHERE id = $1
       RETURNING *
-    `, [campaignId, req.user.userId, req.user.userId])
+    `, [campaignId])
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Campaign not found or no permission to delete' })
+      return res.status(404).json({ message: 'Campaign not found' })
     }
     res.json({ message: 'Campaign deleted successfully' })
   } catch (error) {
@@ -567,8 +489,6 @@ app.delete('/api/campaigns/:campaignId', authenticateToken, async (req, res) => 
 app.get('/api/placements', authenticateToken, async (req, res) => {
   try {
     const { client_id, campaign_id, search } = req.query;
-
-    // MODIFIED: Re-structured to remove user-based restrictions and build query dynamically.
     let queryText = `
       SELECT p.*, c.name as campaign_name, cl.name as client_name
       FROM wb_placements p
@@ -610,7 +530,6 @@ app.get('/api/placements', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/placements', authenticateToken, async (req, res) => {
-  // This endpoint is for BULK creation from PlacementBuilder's main grid
   try {
     const { placements, client_id, campaign_id } = req.body;
     if (!placements || !Array.isArray(placements) || placements.length === 0 || !client_id || !campaign_id) {
@@ -649,17 +568,17 @@ app.put('/api/placements/:placementId', authenticateToken, async (req, res) => {
       SET name = $1, client_id = $2, campaign_id = $3, status = $4, 
           placement_data = $5, 
           dt_updated = $6, updated_by = $7
-      WHERE id = $8 AND (owner = $9 OR (access ? $10 AND access->>$10 LIKE '%edit%'))
+      WHERE id = $8
       RETURNING *
     `, [
       name, client_id, campaign_id, status || 'draft', 
       JSON.stringify(otherPlacementData), 
       now, req.user.userId, 
-      placementId, req.user.userId, req.user.userId
+      placementId
     ]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Placement not found or no permission to edit.' });
+      return res.status(404).json({ message: 'Placement not found.' });
     }
     res.json(result.rows[0]);
   } catch (error) {
@@ -673,12 +592,12 @@ app.delete('/api/placements/:placementId', authenticateToken, async (req, res) =
     const { placementId } = req.params;
     const result = await query(`
       DELETE FROM wb_placements
-      WHERE id = $1 AND (owner = $2 OR (access ? $3 AND access->>$3 LIKE '%delete%'))
+      WHERE id = $1
       RETURNING id 
-    `, [placementId, req.user.userId, req.user.userId]);
+    `, [placementId]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Placement not found or no permission to delete.' });
+      return res.status(404).json({ message: 'Placement not found.' });
     }
     res.json({ message: 'Placement deleted successfully.' });
   } catch (error) {
@@ -688,7 +607,9 @@ app.delete('/api/placements/:placementId', authenticateToken, async (req, res) =
 });
 
 
-// TEMPLATE ROUTES (wb_naming_templates)
+// ===================================
+// TEMPLATE ROUTES - with authorization
+// ===================================
 app.get('/api/templates', authenticateToken, async (req, res) => {
   try {
     const { client_id, type } = req.query;
@@ -702,7 +623,7 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
     const params = [req.user.userId, req.user.userId];
     let paramIndex = 3;
     if (client_id) {
-      queryText += ` AND (t.client = $${paramIndex++} OR t.is_global = true) `; // Client specific or global
+      queryText += ` AND (t.client = $${paramIndex++} OR t.is_global = true) `;
       params.push(client_id);
     }
     if (type) {
@@ -716,7 +637,8 @@ app.get('/api/templates', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-app.post('/api/templates', authenticateToken, async (req, res) => {
+
+app.post('/api/templates', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { name: displayName, type, client_id, description, template_structure, is_global = false } = req.body;
     if (!displayName || !type || !template_structure) {
@@ -725,7 +647,6 @@ app.post('/api/templates', authenticateToken, async (req, res) => {
     const id = generateId();
     const now = new Date();
     const ownerId = req.user.userId;
-    // If is_global is true, client_id should be null. Otherwise, use the provided client_id or null if not provided.
     const finalClientId = is_global ? null : (client_id || null);
 
     const result = await query(`
@@ -740,7 +661,8 @@ app.post('/api/templates', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-app.put('/api/templates/:templateId', authenticateToken, async (req, res) => {
+
+app.put('/api/templates/:templateId', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { templateId } = req.params;
     const { name: displayName, type, client_id, description, template_structure, is_global } = req.body;
@@ -749,21 +671,16 @@ app.put('/api/templates/:templateId', authenticateToken, async (req, res) => {
     }
     const now = new Date();
     const updaterId = req.user.userId;
-    // If is_global is explicitly true, client_id becomes null.
-    // Otherwise, use the provided client_id (or null if it wasn't provided).
     const finalClientId = (typeof is_global === 'boolean' && is_global) ? null : (client_id || null);
-    // Ensure is_global is a boolean. If client_id is provided and is_global is not explicitly set, assume not global for that client.
-    // If no client_id and is_global not set, default to false unless it's a global edit.
     const finalIsGlobal = typeof is_global === 'boolean' ? is_global : (finalClientId === null);
-
 
     const result = await query(`
       UPDATE wb_naming_templates
       SET display_name = $1, type = $2, client = $3, description = $4, fields = $5, is_global = $6, dt_updated = $7, updated_by = $8
-      WHERE id = $9 AND (owner = $10 OR (access ? $11 AND access->>$11 LIKE '%edit%')) 
+      WHERE id = $9
       RETURNING *, display_name as name
-    `, [displayName, type, finalClientId, description || null, JSON.stringify(template_structure), finalIsGlobal, now, updaterId, templateId, updaterId, updaterId]);
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Template not found or no permission.' });
+    `, [displayName, type, finalClientId, description || null, JSON.stringify(template_structure), finalIsGlobal, now, updaterId, templateId]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
     res.json(result.rows[0]);
   } catch (error) {
     if (error.code === '23505') return res.status(409).json({ message: 'Template name conflict.' });
@@ -771,103 +688,58 @@ app.put('/api/templates/:templateId', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-app.delete('/api/templates/:templateId', authenticateToken, async (req, res) => {
+
+app.delete('/api/templates/:templateId', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
-    const { templateId } = req.params
+    const { templateId } = req.params;
     const result = await query(`
       DELETE FROM wb_naming_templates
-      WHERE id = $1 AND (owner = $2 OR (access ? $3 AND access->>$3 LIKE '%delete%'))
+      WHERE id = $1
       RETURNING id
-    `, [templateId, req.user.userId, req.user.userId])
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Template not found or no permission.' });
-    res.json({ message: 'Template deleted successfully' })
+    `, [templateId]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Template not found.' });
+    res.json({ message: 'Template deleted successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Internal server error' })
+    res.status(500).json({ message: 'Internal server error' });
   }
-})
+});
 
 // TRAFFICKING REQUEST ROUTES  
-// app.get('/api/trafficking-requests', authenticateToken, async (req, res) => {
-//   try {
-//     let queryText = `
-//       SELECT tr.*, 
-//              c.name as campaign_name, 
-//              cl.name as client_name,
-//              u.email as submitted_by_email
-//       FROM wb_trafficking_requests tr
-//       LEFT JOIN wb_campaigns c ON tr.campaign_id = c.id
-//       LEFT JOIN wb_clients cl ON tr.client_id = cl.id
-//       LEFT JOIN wb_users u ON tr.submitted_by = u.id`
-//     const params = []
-//     let whereClauses = []
-//     let paramIndex = 1
-//     if (req.user.role === 'buyer') {
-//       whereClauses.push(`tr.submitted_by = $${paramIndex++}`)
-//       params.push(req.user.userId)
-//     } else if (req.user.role === 'adops') {
-//       // Ad-ops users should see all requests
-//       // No specific filter here, but you could add one e.g., for assigned requests
-//     }
-//     // Note: The original filtering logic was a bit restrictive. I've simplified it
-//     // to allow admins/adops to see all requests and buyers to see their own.
-//     // Adjust as needed.
-//     if (whereClauses.length > 0) queryText += ' WHERE ' + whereClauses.join(' AND ')
-//     queryText += ' ORDER BY tr.submitted_at DESC'
-//     const result = await query(queryText, params)
-//     res.json(result.rows)
-//   } catch (error) {
-//     res.status(500).json({ message: 'Internal server error' })
-//   }
-// })
 app.get('/api/trafficking-requests', authenticateToken, async (req, res) => {
   try {
     const mongoDbInstance = await connectToMongo();
     const collection = mongoDbInstance.collection('InitialRequests');
 
     const filter = {};
-    // Apply role-based filtering, matching the logic in the POST route
     if (req.user.role === 'buyer') {
-      // Buyers see requests they submitted. 'submitedBy' in Mongo stores the email.
       filter.submitedBy = req.user.email;
     } 
-    // AdOps and other roles see all requests, so the filter remains empty {}.
 
     const requestsFromMongo = await collection.find(filter)
-      // Sort by the ISO date we stored for better accuracy
       .sort({ '_new_system_data.submitted_at_iso': -1 })
       .toArray();
 
-    // Map the MongoDB document structure to what the frontend expects
     const formattedRequests = requestsFromMongo.map(doc => {
-      // The frontend expects the PostgreSQL ID for update/delete operations
       const pg_id = doc._new_system_data?.pg_id || doc._id.toString();
-
       return {
-        id: pg_id, // Use the stable PostgreSQL ID
+        id: pg_id,
         client_id: doc._new_system_data?.client_id || null,
         campaign_id: doc._new_system_data?.campaign_id || null,
-        
-        // --- Data for display ---
-        client_name: doc.client, // This comes directly from the 'client' field
-        campaign_name: doc.campaign || 'N/A', // Use campaign name if it was stored
-        status: doc.status || 'pending', // Provide default status if not present
+        client_name: doc.client,
+        campaign_name: doc.campaign || 'N/A',
+        status: doc.status || 'pending',
         notes: doc.notes || doc._new_system_data?.notes_new || null,
-        
-        // --- Dates and Submitter ---
         submitted_at: doc._new_system_data?.submitted_at_iso || doc.submitDate,
         due_date: doc.dueDate,
-        submitted_by_email: doc.submitedBy, // Use the email from 'submitedBy'
-        
-        // --- Nested details object for the traffic data ---
+        submitted_by_email: doc.submitedBy,
         request_details: {
           mongo_doc_id: doc._id.toString(),
-          traffic: doc.traffic || [] // The detailed traffic data
+          traffic: doc.traffic || []
         }
       };
     });
 
     res.json(formattedRequests);
-
   } catch (error) {
     console.error("Error fetching trafficking requests from MongoDB:", error);
     res.status(500).json({ message: 'Internal server error while fetching trafficking requests.' });
@@ -888,20 +760,16 @@ app.post('/api/trafficking-requests', authenticateToken, async (req, res) => {
     const generatedPgId = generateId();
     const mongoObjectId = new ObjectId();
     const now = new Date();
-    const ownerId = req.user.userId; // User's UUID
+    const ownerId = req.user.userId;
     const userEmail = req.user.email;
 
-    // --- Get Database Connections First ---
     const mongoDbInstance = await connectToMongo();
-    pgClient = await pool.connect(); // Get a client from the PostgreSQL pool
+    pgClient = await pool.connect();
 
-    // --- Fetch Client Name (and Campaign Name if campaign_id exists) for MongoDB payload ---
-    let clientName = client_id; // Fallback to ID if name not found
+    let clientName = client_id;
     try {
         const clientResult = await pgClient.query('SELECT name FROM wb_clients WHERE id = $1', [client_id]);
-        if (clientResult.rows.length > 0) {
-            clientName = clientResult.rows[0].name;
-        }
+        if (clientResult.rows.length > 0) clientName = clientResult.rows[0].name;
     } catch (dbError) {
         console.warn(`Warning: Could not fetch client name for ID ${client_id}: ${dbError.message}`);
     }
@@ -910,221 +778,90 @@ app.post('/api/trafficking-requests', authenticateToken, async (req, res) => {
     if (campaign_id) {
         try {
             const campaignResult = await pgClient.query('SELECT name FROM wb_campaigns WHERE id = $1', [campaign_id]);
-            if (campaignResult.rows.length > 0) {
-                campaignNameForMongo = campaignResult.rows[0].name;
-            }
+            if (campaignResult.rows.length > 0) campaignNameForMongo = campaignResult.rows[0].name;
         } catch (dbError) {
             console.warn(`Warning: Could not fetch campaign name for ID ${campaign_id}: ${dbError.message}`);
         }
     }
 
-
-    // --- 1. Prepare Payload for MongoDB ("InitialRequests" collection, old structure) ---
     const mongoPayloadForInitialRequests = {
       _id: mongoObjectId,
-      // pg_id: generatedPgId, // Desktop app might not know/care about this
-      client: clientName, // Use fetched client name
-      // campaign: campaignNameForMongo, // Add if desktop app expects a top-level campaign name
-      trackingCreatives: [], // Add as empty array for compatibility
+      client: clientName,
+      trackingCreatives: [],
       traffic: trafficData.map(placement => ({
         placementName: placement.placementName,
-        noIas: placement.creativeAssignments[0]?.noIas !== undefined ? String(placement.creativeAssignments[0].noIas) : "false", // Take from first creative, convert boolean to string
+        noIas: placement.creativeAssignments[0]?.noIas !== undefined ? String(placement.creativeAssignments[0].noIas) : "false",
         creativeAssignments: placement.creativeAssignments.map(creative => ({
           creativeName: creative.creativeName,
           landingPage: creative.landingPage,
-          startDate: creative.startDate, // Assuming these are already "YYYY-MM-DD" strings from frontend
-          endDate: creative.endDate,     // Assuming these are already "YYYY-MM-DD" strings from frontend
+          startDate: creative.startDate,
+          endDate: creative.endDate,
         })),
       })),
-      submitedBy: userEmail, // Keeping the typo for compatibility
-      dueDate: dueDate ? dueDate.split('T')[0] : null, // Store as "YYYY-MM-DD" string
-      submitDate: now.toISOString().split('T')[0], // "YYYY-MM-DD" string
-
-      // --- New fields (desktop app will likely ignore these, but good for new system) ---
-      // You can choose to include them or not in the "InitialRequests" document.
-      // For cleaner separation, you might only put fields the desktop app *needs*.
-      // However, having them doesn't hurt if the desktop app ignores unknown fields.
-      _new_system_data: { // Optional: Group new fields
+      submitedBy: userEmail,
+      dueDate: dueDate ? dueDate.split('T')[0] : null,
+      submitDate: now.toISOString().split('T')[0],
+      _new_system_data: {
           pg_id: generatedPgId,
           client_id: client_id,
           campaign_id: campaign_id || null,
           submitted_at_iso: now,
-          notes_new: notes || null, // Use different name if 'notes' is expected by old app
+          notes_new: notes || null,
           status_new: 'pending',
           owner_new: ownerId,
       }
     };
 
-    // --- 2. Prepare Payload for PostgreSQL JSONB column (new structure) ---
     const requestDetailsForPgJsonb = {
       mongo_doc_id: mongoObjectId.toString(),
-      submitDate: mongoPayloadForInitialRequests.submitDate, // from adapted payload
-      client_id: client_id, // Actual ID
-      campaign_id: campaign_id || null, // Actual ID
-      traffic: trafficData, // Original rich trafficData from frontend
-      submitedBy: userEmail, // Correct spelling if possible, or use the typo
-      dueDate: dueDate || null, // Original dueDate
+      submitDate: mongoPayloadForInitialRequests.submitDate,
+      client_id: client_id,
+      campaign_id: campaign_id || null,
+      traffic: trafficData,
+      submitedBy: userEmail,
+      dueDate: dueDate || null,
       notes: notes || null,
       status: 'pending',
       owner: ownerId
     };
 
-    // --- Start PostgreSQL Transaction ---
     await pgClient.query('BEGIN');
 
-    // --- 3. Insert into PostgreSQL (wb_trafficking_requests table, new structure) ---
     const pgInsertQuery = `
       INSERT INTO wb_trafficking_requests
         (id, client_id, campaign_id, status, notes, submitted_at, owner, submitted_by, due_date, request_details)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`;
     const pgInsertParams = [
-      generatedPgId,
-      client_id,
-      campaign_id || null,
-      'pending', // status
-      notes || null, // notes
-      now, // submitted_at (TIMESTAMPTZ)
-      ownerId, // owner (UUID)
-      ownerId, // submitted_by (UUID)
-      dueDate ? new Date(dueDate) : null, // due_date (DATE)
-      JSON.stringify(requestDetailsForPgJsonb)
+      generatedPgId, client_id, campaign_id || null, 'pending', notes || null, now, ownerId, ownerId,
+      dueDate ? new Date(dueDate) : null, JSON.stringify(requestDetailsForPgJsonb)
     ];
     const pgResult = await pgClient.query(pgInsertQuery, pgInsertParams);
 
-    // --- 4. Insert into MongoDB ("InitialRequests" collection) ---
-    const mongoCollection = mongoDbInstance.collection('InitialRequests'); // TARGET COLLECTION
+    const mongoCollection = mongoDbInstance.collection('InitialRequests');
     await mongoCollection.insertOne(mongoPayloadForInitialRequests);
     console.log(`MongoDB: Inserted into "InitialRequests" with _id: ${mongoPayloadForInitialRequests._id}`);
 
-    // --- Commit PostgreSQL Transaction ---
     await pgClient.query('COMMIT');
-     // --- 5. Send Email Notification ---
-    // await sendTraffickingRequestEmail(
-    //     { trafficData, notes, dueDate },
-    //     userEmail,
-    //     clientName,
-    //     campaignNameForMongo
-    // );
 
     res.status(201).json({
-      message: 'Trafficking request created successfully. Data sent to InitialRequests (MongoDB) and wb_trafficking_requests (PostgreSQL).',
+      message: 'Trafficking request created successfully.',
       postgresRecord: pgResult.rows[0],
       mongoRecordId: mongoPayloadForInitialRequests._id.toString()
     });
 
   } catch (error) {
-    if (pgClient) {
-      await pgClient.query('ROLLBACK');
-    }
-    console.error("Error creating trafficking request (dual write to InitialRequests):", error);
-    res.status(500).json({ message: 'Internal server error while creating trafficking request. ' + error.message });
+    if (pgClient) await pgClient.query('ROLLBACK');
+    console.error("Error creating trafficking request:", error);
+    res.status(500).json({ message: 'Internal server error: ' + error.message });
   } finally {
-    if (pgClient) {
-      pgClient.release();
-    }
+    if (pgClient) pgClient.release();
   }
 });
 
-
-// app.patch('/api/trafficking-requests/:requestId', authenticateToken, async (req, res) => {
-//   try {
-//     const { requestId } = req.params; // This 'requestId' is the pg_id (UUID)
-//     const { status, assigned_to } = req.body;
-
-//     if (!requestId) return res.status(400).json({ message: 'Request ID is required' });
-//     if (status === undefined && assigned_to === undefined) {
-//       return res.status(400).json({ message: 'Status or assigned_to is required' });
-//     }
-
-//     const now = new Date();
-//     const mongoDbInstance = await connectToMongo();
-//     const mongoCollection = mongoDbInstance.collection('trafficking_requests_mongo');
-
-//     // --- Prepare updates for MongoDB ---
-//     const mongoUpdates = { $set: {} };
-//     if (status !== undefined) {
-//       mongoUpdates.$set.status = status;
-//       if (status === 'completed') {
-//         mongoUpdates.$set.completed_at_iso = now;
-//       }
-//     }
-//     if (assigned_to !== undefined) {
-//       // Assuming assigned_to stores a user ID (e.g., from req.user.userId or another user's ID)
-//       // Or it could be an email or name. Adjust your Mongo schema accordingly.
-//       mongoUpdates.$set.assigned_to = assigned_to; // Can be null to unassign
-//     }
-
-//     // --- Update MongoDB document using pg_id as the reference ---
-//     const mongoUpdateResult = await mongoCollection.updateOne(
-//       { pg_id: requestId }, // Find document by its PostgreSQL ID
-//       mongoUpdates
-//     );
-
-//     if (mongoUpdateResult.matchedCount === 0) {
-//       return res.status(404).json({ message: 'Request not found in MongoDB or pg_id mismatch.' });
-//     }
-//     console.log(`MongoDB: Updated trafficking request for pg_id: ${requestId}, Matched: ${mongoUpdateResult.matchedCount}, Modified: ${mongoUpdateResult.modifiedCount}`);
-
-//     // --- Prepare updates for PostgreSQL ---
-//     // (PostgreSQL update logic remains similar, using its own 'id' column)
-//     let pgUpdateFields = [];
-//     let pgParams = [];
-//     let pgParamIndex = 1;
-
-//     if (status) {
-//       pgUpdateFields.push(`status = $${pgParamIndex++}`);
-//       pgParams.push(status);
-//     }
-//     if (status === 'completed') {
-//       pgUpdateFields.push(`completed_at = $${pgParamIndex++}`);
-//       pgParams.push(now);
-//     }
-//     if (assigned_to !== undefined) {
-//       pgUpdateFields.push(`assigned_to = $${pgParamIndex++}`); // Ensure 'assigned_to' column exists in wb_trafficking_requests
-//       pgParams.push(assigned_to);
-//     }
-
-//     if (pgUpdateFields.length === 0) {
-//       // If only Mongo was updated (e.g., a field not in PG) and PG has nothing to update.
-//       // We still need to fetch the (potentially unchanged) PG record to return.
-//       // Or, if no PG update is needed, just fetch the updated Mongo doc and return that.
-//       // For consistency, let's assume PG might always have a status or assigned_to field.
-//        return res.status(400).json({ message: 'No valid fields to update for PostgreSQL record.' });
-//     }
-
-//     pgUpdateFields.push(`dt_updated = $${pgParamIndex++}`); // Always update dt_updated
-//     pgParams.push(now);
-
-//     let pgUpdateQuery = `UPDATE wb_trafficking_requests SET ${pgUpdateFields.join(', ')} WHERE id = $${pgParamIndex++} RETURNING *`;
-//     pgParams.push(requestId); // The 'requestId' from params is the PG 'id'
-
-//     const pgResult = await query(pgUpdateQuery, pgParams);
-
-//     if (pgResult.rows.length === 0) {
-//       // This case should ideally not happen if Mongo update was successful with a match,
-//       // unless data is inconsistent.
-//       console.warn(`Potentially inconsistent data: MongoDB doc found for pg_id ${requestId}, but no matching PG record.`);
-//       return res.status(404).json({ message: 'Request not found in PostgreSQL or no permission, despite MongoDB update.' });
-//     }
-
-//     // Fetch the updated MongoDB document to include in the response
-//     const updatedMongoDoc = await mongoCollection.findOne({ pg_id: requestId });
-
-//     res.json({
-//         message: "Request updated successfully in both databases.",
-//         postgresRecord: pgResult.rows[0],
-//         mongoRecord: updatedMongoDoc
-//     });
-
-//   } catch (error) {
-//     console.error("Error updating trafficking request (dual write):", error);
-//     res.status(500).json({ message: 'Internal server error. ' + error.message });
-//   }
-// });
 app.patch('/api/trafficking-requests/:requestId', authenticateToken, async (req, res) => {
   try {
-    const { requestId } = req.params; // This 'requestId' is the pg_id (UUID)
+    const { requestId } = req.params;
     const { status, assigned_to } = req.body;
 
     if (!requestId) return res.status(400).json({ message: 'Request ID is required' });
@@ -1134,24 +871,18 @@ app.patch('/api/trafficking-requests/:requestId', authenticateToken, async (req,
 
     const now = new Date();
     const mongoDbInstance = await connectToMongo();
-    const mongoCollection = mongoDbInstance.collection('InitialRequests'); // Target the correct collection
+    const mongoCollection = mongoDbInstance.collection('InitialRequests');
 
-    // --- Prepare updates for MongoDB ---
     const mongoUpdates = { $set: {} };
     if (status !== undefined) {
       mongoUpdates.$set.status = status;
-      if (status === 'completed') {
-        mongoUpdates.$set.completed_at_iso = now;
-      }
+      if (status === 'completed') mongoUpdates.$set.completed_at_iso = now;
     }
-    if (assigned_to !== undefined) {
-      mongoUpdates.$set.assigned_to = assigned_to; // Can be null to unassign
-    }
-    mongoUpdates.$set.updated_at_iso = now; // Add an update timestamp
+    if (assigned_to !== undefined) mongoUpdates.$set.assigned_to = assigned_to;
+    mongoUpdates.$set.updated_at_iso = now;
 
-    // --- Update MongoDB document using pg_id as the reference ---
     const mongoUpdateResult = await mongoCollection.updateOne(
-      { '_new_system_data.pg_id': requestId }, // Find document by its PostgreSQL ID
+      { '_new_system_data.pg_id': requestId },
       mongoUpdates
     );
 
@@ -1160,12 +891,10 @@ app.patch('/api/trafficking-requests/:requestId', authenticateToken, async (req,
     }
     console.log(`MongoDB: Updated trafficking request for pg_id: ${requestId}, Matched: ${mongoUpdateResult.matchedCount}, Modified: ${mongoUpdateResult.modifiedCount}`);
 
-    // Fetch the updated MongoDB document to include in the response
     const updatedMongoDoc = await mongoCollection.findOne({ '_new_system_data.pg_id': requestId });
 
     res.json({
         message: "Request updated successfully in MongoDB.",
-        // We will no longer return a separate postgresRecord
         mongoRecord: updatedMongoDoc
     });
 
@@ -1174,53 +903,6 @@ app.patch('/api/trafficking-requests/:requestId', authenticateToken, async (req,
     res.status(500).json({ message: 'Internal server error. ' + error.message });
   }
 });
-// LEGEND FIELDS ROUTES
-app.get('/api/legend-fields', authenticateToken, async (req, res) => {
-  try {
-    const { category } = req.query;
-    let queryText;
-    const queryParams = [];
-    if (category) {
-      if (category === '__ALL_ITEMS__') {
-        // Fetches all items, good for a global legend item selector in a template
-        queryText = `SELECT id, display_name, value, abbreviation FROM wb_legend_fields ORDER BY display_name ASC, value ASC`;
-      } else {
-        // Fetches items for a specific category, good for populating dropdowns in builders
-        queryText = `SELECT id, display_name as category_name, value, abbreviation FROM wb_legend_fields WHERE display_name = $1 ORDER BY value ASC`;
-        queryParams.push(category);
-      }
-    } else {
-      // Fetches distinct categories, good for TemplateBuilder's category selection
-      queryText = 'SELECT DISTINCT display_name FROM wb_legend_fields ORDER BY display_name ASC';
-    }
-    const result = await query(queryText, queryParams);
-    let legendItems;
-    if (category) {
-        if (category === '__ALL_ITEMS__') {
-            legendItems = result.rows.map(row => ({
-                id: row.id, // Unique ID of the legend item itself
-                label: `${row.display_name}: ${row.value}${row.abbreviation ? ` (${row.abbreviation})` : ''}`, // For display in a flat list
-                value: row.id, // Use unique ID as value for selection
-                category: row.display_name, // The category this item belongs to
-                actual_value: row.value, // The actual value string
-                abbreviation: row.abbreviation
-            }));
-        } else { // Items for a specific category
-            legendItems = result.rows.map(row => ({
-                id: row.id,
-                label: `${row.value || 'N/A'}${row.abbreviation ? ` (${row.abbreviation})` : ''}`, // Display in dropdown
-                value: row.value, // The actual value to be used in naming conventions
-                abbreviation: row.abbreviation // Abbreviation, if present
-            }));
-        }
-    } else { // Distinct categories
-        legendItems = result.rows.map(row => ({ label: row.display_name, value: row.display_name }));
-    }
-    res.json(legendItems);
-  } catch (error) {
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
 
 // LEGEND FIELDS ROUTES
 app.get('/api/legend-fields', authenticateToken, async (req, res) => {
@@ -1230,15 +912,12 @@ app.get('/api/legend-fields', authenticateToken, async (req, res) => {
     const queryParams = [];
     if (category) {
       if (category === '__ALL_ITEMS__') {
-        // Fetches all items, good for a global legend item selector in a template
         queryText = `SELECT id, display_name, value, abbreviation FROM wb_legend_fields ORDER BY display_name ASC, value ASC`;
       } else {
-        // Fetches items for a specific category, good for populating dropdowns in builders
         queryText = `SELECT id, display_name as category_name, value, abbreviation FROM wb_legend_fields WHERE display_name = $1 ORDER BY value ASC`;
         queryParams.push(category);
       }
     } else {
-      // Fetches distinct categories, good for TemplateBuilder's category selection
       queryText = 'SELECT DISTINCT display_name FROM wb_legend_fields ORDER BY display_name ASC';
     }
     const result = await query(queryText, queryParams);
@@ -1246,22 +925,22 @@ app.get('/api/legend-fields', authenticateToken, async (req, res) => {
     if (category) {
         if (category === '__ALL_ITEMS__') {
             legendItems = result.rows.map(row => ({
-                id: row.id, // Unique ID of the legend item itself
-                label: `${row.display_name}: ${row.value}${row.abbreviation ? ` (${row.abbreviation})` : ''}`, // For display in a flat list
-                value: row.id, // Use unique ID as value for selection
-                category: row.display_name, // The category this item belongs to
-                actual_value: row.value, // The actual value string
+                id: row.id,
+                label: `${row.display_name}: ${row.value}${row.abbreviation ? ` (${row.abbreviation})` : ''}`,
+                value: row.id,
+                category: row.display_name,
+                actual_value: row.value,
                 abbreviation: row.abbreviation
             }));
-        } else { // Items for a specific category
+        } else {
             legendItems = result.rows.map(row => ({
                 id: row.id,
-                label: `${row.value || 'N/A'}${row.abbreviation ? ` (${row.abbreviation})` : ''}`, // Display in dropdown
-                value: row.value, // The actual value to be used in naming conventions
-                abbreviation: row.abbreviation // Abbreviation, if present
+                label: `${row.value || 'N/A'}${row.abbreviation ? ` (${row.abbreviation})` : ''}`,
+                value: row.value,
+                abbreviation: row.abbreviation
             }));
         }
-    } else { // Distinct categories
+    } else {
         legendItems = result.rows.map(row => ({ label: row.display_name, value: row.display_name }));
     }
     res.json(legendItems);
@@ -1270,8 +949,8 @@ app.get('/api/legend-fields', authenticateToken, async (req, res) => {
   }
 });
 
-// ---- START: NEW LEGEND FIELD CRUD ENDPOINTS ----
-app.post('/api/legend-fields', authenticateToken, async (req, res) => {
+// CRUD for Legend Fields
+app.post('/api/legend-fields', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { display_name, value, abbreviation } = req.body;
     if (!display_name || !value) {
@@ -1288,15 +967,13 @@ app.post('/api/legend-fields', authenticateToken, async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    if (error.code === '23505') { // unique constraint violation
-        return res.status(409).json({ message: 'A legend item with this combination already exists.' });
-    }
+    if (error.code === '23505') return res.status(409).json({ message: 'A legend item with this combination already exists.' });
     console.error('Error creating legend field:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-app.put('/api/legend-fields/:id', authenticateToken, async (req, res) => {
+app.put('/api/legend-fields/:id', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { id } = req.params;
     const { display_name, value, abbreviation } = req.body;
@@ -1312,36 +989,28 @@ app.put('/api/legend-fields/:id', authenticateToken, async (req, res) => {
        RETURNING *`,
       [display_name, value, abbreviation || null, now, userId, id]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Legend field not found.' });
-    }
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Legend field not found.' });
     res.json(result.rows[0]);
   } catch (error) {
-     if (error.code === '23505') {
-        return res.status(409).json({ message: 'A legend item with this combination already exists.' });
-    }
+     if (error.code === '23505') return res.status(409).json({ message: 'A legend item with this combination already exists.' });
     console.error('Error updating legend field:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-app.delete('/api/legend-fields/:id', authenticateToken, async (req, res) => {
+app.delete('/api/legend-fields/:id', authenticateToken, authorizeAdOps, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await query(
-      'DELETE FROM wb_legend_fields WHERE id = $1 RETURNING id',
-      [id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'Legend field not found.' });
-    }
+    const result = await query('DELETE FROM wb_legend_fields WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ message: 'Legend field not found.' });
     res.json({ message: 'Legend field deleted successfully.' });
   } catch (error) {
     console.error('Error deleting legend field:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
-app.post('/api/legend-fields/bulk-upload', authenticateToken, async (req, res) => {
+
+app.post('/api/legend-fields/bulk-upload', authenticateToken, authorizeAdOps, async (req, res) => {
   const { items, mode } = req.body;
   const userId = req.user.userId;
 
@@ -1356,32 +1025,25 @@ app.post('/api/legend-fields/bulk-upload', authenticateToken, async (req, res) =
     if (mode === 'replace_category') {
       const categories = [...new Set(items.map(item => item.category))];
       if (categories.length > 0) {
-        await client.query(
-          'DELETE FROM wb_legend_fields WHERE display_name = ANY($1)',
-          [categories]
-        );
+        await client.query('DELETE FROM wb_legend_fields WHERE display_name = ANY($1)', [categories]);
       }
-      // After deleting, we fall through to the standard insert logic
     }
 
-    // This handles 'replace_category' (after delete) and 'add_new'/'update'
     for (const item of items) {
       const { category, value, abbreviation } = item;
-      if (!category || !value) continue; // Skip invalid rows
+      if (!category || !value) continue;
 
       const id = generateId();
       const now = new Date();
 
       if (mode === 'add_new') {
-        // Attempt to insert, but do nothing if a conflict on (display_name, value) occurs
         await client.query(
           `INSERT INTO wb_legend_fields (id, display_name, value, abbreviation, dt_created, created_by, dt_updated, updated_by)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (display_name, value) DO NOTHING`,
           [id, category, value, abbreviation || null, now, userId, now, userId]
         );
-      } else { // Handles 'update' and 'replace_category'
-        // Insert or, on conflict, update the abbreviation and timestamps
+      } else {
         await client.query(
           `INSERT INTO wb_legend_fields (id, display_name, value, abbreviation, dt_created, created_by, dt_updated, updated_by)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -1405,14 +1067,12 @@ app.post('/api/legend-fields/bulk-upload', authenticateToken, async (req, res) =
     client.release();
   }
 });
-// ---- END: NEW LEGEND FIELD CRUD ENDPOINTS ----
 
-// ---- START: NEW UTMs ENDPOINT ----
+// UTMs ENDPOINTS
 app.get('/api/utms', authenticateToken, async (req, res) => {
   try {
     const { client_id, campaign_id, search } = req.query;
     
-    // MODIFIED: Re-structured to remove user-based restrictions and build query dynamically.
     let queryText = `
       SELECT u.*, 
              cl.name as client_name, 
@@ -1461,12 +1121,11 @@ app.get('/api/utms', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error while fetching UTMs.' });
   }
 });
+
 app.post('/api/utms', authenticateToken, async (req, res) => {
   try {
-    // The UTMBuilder sends an array of UTM objects directly in the body
     const utmsToCreate = req.body; 
     
-    // Basic validation
     if (!utmsToCreate || !Array.isArray(utmsToCreate) || utmsToCreate.length === 0) {
       return res.status(400).json({ message: 'An array of UTMs to create is required.' });
     }
@@ -1475,65 +1134,33 @@ app.post('/api/utms', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     const now = new Date();
 
-    // Loop through each UTM object sent from the frontend
     for (const utm of utmsToCreate) {
       const { client_id, campaign_id, source, medium, term, content, full_url } = utm;
-
-      // Server-side validation for required fields in each object
       if (!source || !medium || !full_url) {
         console.warn('Skipping a UTM in the batch due to missing required fields:', utm);
-        continue; // Skip this invalid item and proceed with the rest
+        continue;
       }
-
       const newId = generateId();
-
       const result = await query(
         `INSERT INTO wb_utms (id, client_id, campaign_id, source, medium, term, content, full_url, owner, dt_created, created_by, dt_updated, updated_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *`,
-        [
-          newId,
-          client_id || null,
-          campaign_id || null,
-          source,
-          medium,
-          term || null,
-          content || null,
-          full_url,
-          userId,
-          now,
-          userId,
-          now,
-          userId
-        ]
+        [ newId, client_id || null, campaign_id || null, source, medium, term || null, content || null,
+          full_url, userId, now, userId, now, userId ]
       );
-      
-      if (result.rows[0]) {
-        createdUtms.push(result.rows[0]);
-      }
+      if (result.rows[0]) createdUtms.push(result.rows[0]);
     }
-
-    // Respond with a 201 "Created" status and the data of the new UTMs
     res.status(201).json(createdUtms);
-
   } catch (error) {
     console.error('Error creating UTMs:', error);
     res.status(500).json({ message: 'Internal server error while creating UTMs.' });
   }
 });
-// PUT /api/utms/:utmId - Update a UTM
+
 app.put('/api/utms/:utmId', authenticateToken, async (req, res) => {
   try {
     const { utmId } = req.params;
-    const {
-      client_id, // May or may not be updatable depending on rules
-      campaign_id, // May or may not be updatable
-      source,
-      medium,
-      term,
-      content,
-      full_url, // This should be regenerated if components change
-    } = req.body;
+    const { client_id, campaign_id, source, medium, term, content, full_url } = req.body;
 
     if (!source || !medium || !full_url) {
       return res.status(400).json({ message: 'Source, medium, and full_url are required.' });
@@ -1546,15 +1173,13 @@ app.put('/api/utms/:utmId', authenticateToken, async (req, res) => {
       UPDATE wb_utms
       SET client_id = $1, campaign_id = $2, source = $3, medium = $4, term = $5, content = $6, full_url = $7,
           dt_updated = $8, updated_by = $9
-      WHERE id = $10 AND (owner = $11) -- Add access check if necessary
+      WHERE id = $10
       RETURNING *
-    `, [
-      client_id || null, campaign_id || null, source, medium, term || null, content || null, full_url,
-      now, userId, utmId, userId
-    ]);
+    `, [ client_id || null, campaign_id || null, source, medium, term || null, content || null, full_url,
+      now, userId, utmId ]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'UTM not found or no permission to edit.' });
+      return res.status(404).json({ message: 'UTM not found.' });
     }
     res.json(result.rows[0]);
   } catch (error) {
@@ -1563,20 +1188,17 @@ app.put('/api/utms/:utmId', authenticateToken, async (req, res) => {
   }
 });
 
-// DELETE /api/utms/:utmId - Delete a UTM
 app.delete('/api/utms/:utmId', authenticateToken, async (req, res) => {
   try {
     const { utmId } = req.params;
-    const userId = req.user.userId;
-
     const result = await query(`
       DELETE FROM wb_utms
-      WHERE id = $1 AND (owner = $2) -- Add access check if necessary
+      WHERE id = $1
       RETURNING id
-    `, [utmId, userId]);
+    `, [utmId]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ message: 'UTM not found or no permission to delete.' });
+      return res.status(404).json({ message: 'UTM not found.' });
     }
     res.json({ message: 'UTM deleted successfully.' });
   } catch (error) {
@@ -1584,8 +1206,6 @@ app.delete('/api/utms/:utmId', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Internal server error while deleting UTM.' });
   }
 });
-// ---- END: NEW UTMs ENDPOINT ----
-
 
 // Error handling middleware & 404
 app.use((error, req, res, next) => {
